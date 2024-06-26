@@ -24,8 +24,8 @@ pip install -r requirements.txt
 ## Environment variables
 Set the environment variables in a `.env` file
 ```
-AUTH_TOKEN = <your-notion-api-key>
-AI_KEY = <your-tuneai-api-key>
+NOTION_KEY = <your-notion-api-key>
+TUNEAI_TOKEN = <your-tuneai-api-key>
 SERPER_KEY = <your-serper-api-key>
 ```
 
