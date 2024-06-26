@@ -30,26 +30,18 @@ SERPER_KEY = <your-serper-api-key>
 ```
 
 ## Functions
-**`call_llm` Function**
-Function to call the LLM API with a specific `messages` parameter and return the response content.
+- `call_llm`: Function to call the LLM API with a specific `messages` parameter and return the response content.
 
-**`gen_recipe` Function**
-Function to generate a recipe based on `dish_title`, `ingredients` and `num_ingredients`.
+- `gen_recipe`: Function to generate a recipe based on `dish_title`, `ingredients` and `num_ingredients`.
 
-**`gen_recipe_title` Function**
-Function to generate a recipe title based on `topic` which is the content entered by the user.
+- `gen_recipe_title`: Function to generate a recipe title based on `topic` which is the content entered by the user.
 
-**`gen_num_ingredients` Function**
-Function to count the number of ingredients entered by the user in `topic`.
+- `gen_num_ingredients`: Function to count the number of ingredients entered by the user in `topic`.
 
-**`gen_ingredient_list` Function**
-Function to create an ingredients list based on `topic` entered by the user.
+- `gen_ingredient_list`: Function to create an ingredients list based on `topic` entered by the user.
 
-**`gen_description` Function**
-Function to generate a description for the recipe using `dish_title`, `ingredients` and `recipe`.
+`gen_description`: Function to generate a description for the recipe using `dish_title`, `ingredients` and `recipe`.
 
-**`gen_cover_image` Function**
-Function to create a cover image for the Notion page of the recipe using `dish_title` and the Serper Image Search API.
+`gen_cover_image`: Function to create a cover image for the Notion page of the recipe using `dish_title` and the Serper Image Search API.
 
-**`gen_emoji` Function**
-Function to generate an emoji icon for the recipe using `dish_title`.
+`gen_emoji`: Function to generate an emoji icon for the recipe using `dish_title`.
