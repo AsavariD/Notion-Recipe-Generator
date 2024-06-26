@@ -40,8 +40,8 @@ SERPER_KEY = <your-serper-api-key>
 
 - `gen_ingredient_list`: Function to create an ingredients list based on `topic` entered by the user.
 
-`gen_description`: Function to generate a description for the recipe using `dish_title`, `ingredients` and `recipe`.
+- `gen_description`: Function to generate a description for the recipe using `dish_title`, `ingredients` and `recipe`.
 
-`gen_cover_image`: Function to create a cover image for the Notion page of the recipe using `dish_title` and the Serper Image Search API.
+- `gen_cover_image`: Function to create a cover image for the Notion page of the recipe using `dish_title` and the Serper Image Search API.
 
-`gen_emoji`: Function to generate an emoji icon for the recipe using `dish_title`.
+- `gen_emoji`: Function to generate an emoji icon for the recipe using `dish_title`.
