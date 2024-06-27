@@ -13,7 +13,7 @@ python main.py --topic='give me a recipe using bread, chicken, onion' \
 
 Notion Output:
 
-![screencapture-notion-so-Chicken-Onion-Sandwich-b193f648f1a64833b77886f17e847b4e-2024-06-26-10_51_58](https://github.com/AsavariD/notion-comm/assets/69451908/a5a00d1b-911d-45dd-93da-357c6b6d17a1)
+![Chicken-Onion-Sandwich](https://github.com/AsavariD/Notion-Recipe-Generato/assets/notion image.png)
 
 ## Installation
 To install the dependencies in the requirements.txt file run the following command:
