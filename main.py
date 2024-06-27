@@ -170,11 +170,9 @@ def get_emoji(dish_title):
             "role": "system",
             "content": """List of emojis: 👌, 😋, 🍗,🍝,🍚,🍴,🍰,🍪,🍩,🍜,🍝,🍠,🍣,🍤,🦐,🥗,🍲,🥘,🥚,🥙,🍖,🥓,🍔,🍕,🥞,🥖,🥐,🍞,🫘,🥜,🫒,🥑,🍆,🥔,🥕,🥒,🍅,🥝,🍓,🍒,🍑,🍍,🍇,🍈,🍉,🍊.🍌
             Follow these rules strictly: 
-            1. One emoji is printed from the list.
-            2. The output string length should be 1 character.
-            3. If more than one emojis are valid, choose the first one.
-            4. Do not include any text before and after the emoji.
-            5. Do not include information about why the emoji was chosen.
+            1. The output should be exactly 1 emoji character.
+            2. Do not include any text before and after the emoji.
+            3. If multiple emojis are valid, choose the first one.
                             
             For example, if the dish is titled Lemon Ginger Fish, the output should be:
             🐟
@@ -188,9 +186,9 @@ def get_emoji(dish_title):
             For example if the dish is titled Chicken Tomato Pasta, the output should be:
             🍝
 
-            For example if you cannot find an appropriate emoji, the output should be:
+            If you cannot find an appropriate emoji, the output should be:
             👌
-                """,
+        """
         },
         {
             "role": "user",
