@@ -168,31 +168,39 @@ def get_emoji(dish_title):
     messages = [
         {
             "role": "system",
-            "content": """List of emojis: 👌, 😋, 🍗,🍝,🍚,🍴,🍰,🍪,🍩,🍜,🍝,🍠,🍣,🍤,🦐,🥗,🍲,🥘,🥚,🥙,🍖,🥓,🍔,🍕,🥞,🥖,🥐,🍞,🫘,🥜,🫒,🥑,🍆,🥔,🥕,🥒,🍅,🥝,🍓,🍒,🍑,🍍,🍇,🍈,🍉,🍊.🍌
-            Follow these rules strictly: 
-            1. The output should be exactly 1 emoji character.
-            2. Do not include any text before and after the emoji.
-            3. If multiple emojis are valid, choose the first one.
-                            
-            For example, if the dish is titled Lemon Ginger Fish, the output should be:
-            🐟
-
-            For example if the dish is titled Chicken Onion Curry, the output should be:
-            🍗
-
-            For example if the dish is titled Tomato Onion Sandwich, the output should be:
-            🥪
-
-            For example if the dish is titled Chicken Tomato Pasta, the output should be:
-            🍝
-
-            If you cannot find an appropriate emoji, the output should be:
-            👌
-        """
+            "content": """List of emojis: 👌, 😋, 🍗,🍝,🍚,🍴,🍰,🍪,🍩,🍜,🍝,🍠,🍣,🍤,🦐,🥗,🍲,🥘,🥚,
+            🥙,🍖,🥓,🍔,🍕,🥞,🥖,🥐,🍞,🫘,🥜,🫒,🥑,🍆,🥔,🥕,🥒,🍅,🥝,🍓,🍒,🍑,🍍,🍇,🍈,🍉,🍊.🍌\n
+            Follow these rules strictly: \n
+            1. The output should be exactly 1 emoji character.\n
+            2. Do not include any text before and after the emoji."""
         },
         {
             "role": "user",
-            "content": f"Choose one emoji for {dish_title}",
+            "content": "I want one emoji for the dish titled Chicken Onion Sandwich. Choose one emoji from the list you have and return it."
+        },
+        {
+            "role": "assistant",
+            "content": "🍔"
+        },
+        {
+            "role": "user",
+            "content": "I want one emoji for the dish titled Chicken Onion Tomato. Choose one emoji from the list you have and return it."
+        },
+        {
+            "role": "assistant",
+            "content": "🍅"
+        },
+        {
+            "role": "user",
+            "content": "I want one emoji for the dish titled Caramelized Onion Pasta. Choose one emoji from the list you have and return it."
+        },
+        {
+            "role": "assistant",
+            "content": "🍝"
+        },
+        {
+            "role": "user",
+            "content": f"I want one emoji for the dish titled {dish_title}. Choose one emoji from the list you have and return it.",
         },
     ]
 
