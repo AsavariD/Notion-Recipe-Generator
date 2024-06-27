@@ -5,7 +5,6 @@ import os
 import requests
 import json
 import fire
-import http.client
 
 NOTION_KEY = os.getenv("AUTH_TOKEN")
 TUNEAI_TOKEN = os.getenv("AI_KEY")
