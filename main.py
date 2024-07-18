@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 import requests
-import json
 import fire
+import logging
 
 NOTION_KEY = os.getenv("AUTH_TOKEN")
 TUNEAI_TOKEN = os.getenv("TUNE_KEY")
@@ -37,7 +37,6 @@ def call_llm(messages):
     response = requests.post(url, headers=headers, json=data)
     response.raise_for_status()
     response_data = response.json()
-    print(response_data)
     return response_data["choices"][0]["message"]["content"].strip()
 
 
@@ -69,18 +68,23 @@ def gen_recipe_title(topic):
     messages = [
         {
             "role": "system",
-            "content": """You are a recipe title generator. Your task is to create a concise and engaging dish title based on the ingredients provided by the user. Follow these rules strictly:
-                1. Collect the ingredients from the user.
-                2. Generate a dish title that is no more than 5 words long.
-                3. Only print the title without any quotation marks.
-                4. Do not include the list of ingredients, steps, markdowns or any additional information.
-                5. Do not include any text, quotes or anything before and after the title.
-
-                For example, if the ingredients are "chicken, garlic, lemon", a valid output could be:
-
-                Lemon Garlic Chicken
-                """,
+            "content": "You are a recipe title generator. Your task is to create a concise and engaging dish title based on the ingredients provided by the user. Follow these rules strictly:\n1. Collect the ingredients from the user.\n2. Generate a dish title that is no more than 5 words long.\n3. Only print the title without any quotation marks.\n4. Do not include the list of ingredients, steps, markdowns or any additional information.\n5. Do not include any text, quotes or anything before and after the title.",
         },
+        {
+            "role": "user",
+            "content": "give me a recipe using fish, red chili powder, salt, ginger, garlic",
+        },
+        {"role": "assistant", "content": "Fish Curry"},
+        {
+            "role": "user",
+            "content": "give me a recipe using potato, flour, corn flour, peri-peri",
+        },
+        {"role": "assistant", "content": "Spicy Potato Cakes"},
+        {
+            "role": "user",
+            "content": "give me a recipe using chicken, garlic, lemon, onion",
+        },
+        {"role": "assistant", "content": "Lemon Chicken"},
         {"role": "user", "content": topic},
     ]
 
@@ -155,8 +159,8 @@ def get_cover_image(dish_title):
     serper_headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     data = {"q": dish_title}
     response = requests.post(url, headers=serper_headers, json=data)
+    response.raise_for_status()
     response_data = response.json()
-    print(response_data)
     return response_data["images"][0]["imageUrl"]
 
 
@@ -194,12 +198,65 @@ def get_emoji(dish_title):
     return call_llm(messages)
 
 
-def main(topic, page_id, model):
+def check_unique_titles(page_id, dish_title):
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{page_id}/children", headers=notion_headers
+    )
+    response_data = response.json()
+    list_of_pages = response_data["results"]
+    recipe_titles = []
+    page_ids = []
+
+    for i in range(len(list_of_pages)):
+        recipe_titles.append(list_of_pages[i]["child_page"]["title"])
+        page_ids.append(list_of_pages[i]["id"])
+
+    messages = [
+        {
+            "role": "system",
+            "content": 'Your task is to verify if a title is unique compared to an existing list of titles. Follow these steps:\n\n2. Compare the "Title" against the existing "List" of titles.\n3. The output should be either "unique" or "not unique".\n4. Do not print any additional text.',
+        },
+        {
+            "role": "user",
+            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {
+            "role": "user",
+            "content": "Title: \"Honey Garlic Chicken\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "unique"},
+        {
+            "role": "user",
+            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "not unique"},
+        {
+            "role": "user",
+            "content": "Title: \"Chocolate Pudding\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "unique"},
+        {
+            "role": "user",
+            "content": f"""Title: "{dish_title}"
+            List: {recipe_titles}
+            Return "unique" if the title is not found in the given list. 
+            Return "not unique" if the title is found in the given list.""",
+        },
+    ]
+
+    return call_llm(messages)
+
+
+def main(topic, page_id):
     if type(topic) == tuple:
         topic = ",".join(topic)
 
     num_ingredients = gen_num_ingredients(topic)
     dish_title = gen_recipe_title(topic)
+    while check_unique_titles(page_id, dish_title) != "unique":
+        dish_title = gen_recipe_title(topic)
+        logging.info("Generating unique title")
+
     ingredients = gen_ingredient_list(topic)
     recipe = gen_recipe(dish_title, ingredients, num_ingredients)
     description = gen_description(dish_title, ingredients, recipe)
