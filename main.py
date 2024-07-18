@@ -7,7 +7,7 @@ import json
 import fire
 
 NOTION_KEY = os.getenv("AUTH_TOKEN")
-TUNEAI_TOKEN = os.getenv("AI_KEY")
+TUNEAI_TOKEN = os.getenv("TUNE_KEY")
 SERPER_API_KEY = os.getenv("SERPER_KEY")
 
 notion_headers = {
@@ -152,12 +152,9 @@ def gen_description(dish_title, ingredients, recipe):
 
 def get_cover_image(dish_title):
     url = "https://google.serper.dev/images"
-    serper_headers = {
-        "X-API-KEY": SERPER_API_KEY, 
-        "Content-Type": "application/json"
-    }
+    serper_headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
     data = {"q": dish_title}
-    response = requests.post(url, headers = serper_headers, json = data)
+    response = requests.post(url, headers=serper_headers, json=data)
     response_data = response.json()
     print(response_data)
     return response_data["images"][0]["imageUrl"]
@@ -171,32 +168,23 @@ def get_emoji(dish_title):
             🥙,🍖,🥓,🍔,🍕,🥞,🥖,🥐,🍞,🫘,🥜,🫒,🥑,🍆,🥔,🥕,🥒,🍅,🥝,🍓,🍒,🍑,🍍,🍇,🍈,🍉,🍊.🍌\n
             Follow these rules strictly: \n
             1. The output should be exactly 1 emoji character.\n
-            2. Do not include any text before and after the emoji."""
+            2. Do not include any text before and after the emoji.""",
         },
         {
             "role": "user",
-            "content": "I want one emoji for the dish titled Chicken Onion Sandwich. Choose one emoji from the list you have and return it."
+            "content": "I want one emoji for the dish titled Chicken Onion Sandwich. Choose one emoji from the list you have and return it.",
         },
-        {
-            "role": "assistant",
-            "content": "🍔"
-        },
+        {"role": "assistant", "content": "🍔"},
         {
             "role": "user",
-            "content": "I want one emoji for the dish titled Chicken Onion Tomato. Choose one emoji from the list you have and return it."
+            "content": "I want one emoji for the dish titled Chicken Onion Tomato. Choose one emoji from the list you have and return it.",
         },
-        {
-            "role": "assistant",
-            "content": "🍅"
-        },
+        {"role": "assistant", "content": "🍅"},
         {
             "role": "user",
-            "content": "I want one emoji for the dish titled Caramelized Onion Pasta. Choose one emoji from the list you have and return it."
+            "content": "I want one emoji for the dish titled Caramelized Onion Pasta. Choose one emoji from the list you have and return it.",
         },
-        {
-            "role": "assistant",
-            "content": "🍝"
-        },
+        {"role": "assistant", "content": "🍝"},
         {
             "role": "user",
             "content": f"I want one emoji for the dish titled {dish_title}. Choose one emoji from the list you have and return it.",
@@ -311,7 +299,7 @@ def main(topic, page_id, model):
         )
 
     response = requests.patch(
-        f"https://api.notion.com/v1/blocks/{new_page_data["id"]}/children",
+        f"https://api.notion.com/v1/blocks/{new_page_data['id']}/children",
         headers=notion_headers,
         json=data,
     )
