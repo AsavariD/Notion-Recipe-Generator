@@ -20,24 +20,30 @@ model = "rohan/mixtral-8x7b-inst-v0-1-32k"
 
 
 def call_llm(messages):
-    url = "https://proxy.tune.app/chat/completions"
-    headers = {
-        "Authorization": TUNEAI_TOKEN,
-        "Content-Type": "application/json",
-        "X-Org-Id": "e41f60a3-06c9-4133-bc6d-127bc6f3f215",
-    }
-    data = {
-        "temperature": 0.8,
-        "messages": messages,
-        "model": model,
-        "stream": False,
-        "frequency_penalty": 0,
-        "max_tokens": 500,
-    }
-    response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    response_data = response.json()
-    return response_data["choices"][0]["message"]["content"].strip()
+    try:
+        url = "https://proxy.tune.app/chat/completions"
+        headers = {
+            "Authorization": TUNEAI_TOKEN,
+            "Content-Type": "application/json",
+            "X-Org-Id": "e41f60a3-06c9-4133-bc6d-127bc6f3f215",
+        }
+        data = {
+            "temperature": 0.8,
+            "messages": messages,
+            "model": model,
+            "stream": False,
+            "frequency_penalty": 0,
+            "max_tokens": 500,
+        }
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        response_data = response.json()
+        return response_data["choices"][0]["message"]["content"].strip()
+
+    except requests.RequestException as e:
+        logging.error(f"Error in calling LLM: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
 
 
 def create_recipe(dish_title, ingredients, num_ingredients):
@@ -155,13 +161,22 @@ def create_description(dish_title, ingredients, recipe):
 
 
 def get_cover_image(dish_title):
-    url = "https://google.serper.dev/images"
-    serper_headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
-    data = {"q": dish_title}
-    response = requests.post(url, headers=serper_headers, json=data)
-    response.raise_for_status()
-    response_data = response.json()
-    return response_data["images"][0]["imageUrl"]
+    try:
+        url = "https://google.serper.dev/images"
+        serper_headers = {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+        }
+        data = {"q": dish_title}
+        response = requests.post(url, headers=serper_headers, json=data)
+        response.raise_for_status()
+        response_data = response.json()
+        return response_data["images"][0]["imageUrl"]
+
+    except requests.RequestException as e:
+        logging.error(f"Error fetching cover image: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
 
 
 def get_emoji(dish_title):
@@ -199,52 +214,59 @@ def get_emoji(dish_title):
 
 
 def check_unique_titles(page_id, dish_title):
-    response = requests.get(
-        f"https://api.notion.com/v1/blocks/{page_id}/children", headers=notion_headers
-    )
-    response_data = response.json()
-    list_of_pages = response_data["results"]
-    recipe_titles = []
-    page_ids = []
+    try:
+        response = requests.get(
+            f"https://api.notion.com/v1/blocks/{page_id}/children",
+            headers=notion_headers,
+        )
+        response_data = response.json()
+        list_of_pages = response_data["results"]
+        recipe_titles = []
+        page_ids = []
 
-    for i in range(len(list_of_pages)):
-        recipe_titles.append(list_of_pages[i]["child_page"]["title"])
-        page_ids.append(list_of_pages[i]["id"])
+        for i in range(len(list_of_pages)):
+            recipe_titles.append(list_of_pages[i]["child_page"]["title"])
+            page_ids.append(list_of_pages[i]["id"])
 
-    messages = [
-        {
-            "role": "system",
-            "content": 'Your task is to verify if a title is unique compared to an existing list of titles. Follow these steps:\n\n2. Compare the "Title" against the existing "List" of titles.\n3. The output should be either "unique" or "not unique".\n4. Do not print any additional text.',
-        },
-        {
-            "role": "user",
-            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-        },
-        {
-            "role": "user",
-            "content": "Title: \"Honey Garlic Chicken\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-        },
-        {"role": "assistant", "content": "unique"},
-        {
-            "role": "user",
-            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-        },
-        {"role": "assistant", "content": "not unique"},
-        {
-            "role": "user",
-            "content": "Title: \"Chocolate Pudding\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-        },
-        {"role": "assistant", "content": "unique"},
-        {
-            "role": "user",
-            "content": f"""Title: "{dish_title}"
-            List: {recipe_titles}
-            Return "unique" if the title is not found in the given list. 
-            Return "not unique" if the title is found in the given list.""",
-        },
-    ]
+        messages = [
+            {
+                "role": "system",
+                "content": 'Your task is to verify if a title is unique compared to an existing list of titles. Follow these steps:\n\n2. Compare the "Title" against the existing "List" of titles.\n3. The output should be either "unique" or "not unique".\n4. Do not print any additional text.',
+            },
+            {
+                "role": "user",
+                "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+            },
+            {
+                "role": "user",
+                "content": "Title: \"Honey Garlic Chicken\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+            },
+            {"role": "assistant", "content": "unique"},
+            {
+                "role": "user",
+                "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+            },
+            {"role": "assistant", "content": "not unique"},
+            {
+                "role": "user",
+                "content": "Title: \"Chocolate Pudding\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+            },
+            {"role": "assistant", "content": "unique"},
+            {
+                "role": "user",
+                "content": f"""Title: "{dish_title}"
+                List: {recipe_titles}
+                Return "unique" if the title is not found in the given list. 
+                Return "not unique" if the title is found in the given list.""",
+            },
+        ]
 
-    return call_llm(messages)
+        return call_llm(messages)
+
+    except requests.RequestException as e:
+        logging.error(f"Error checking unique titles: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
 
 
 def main(topic, page_id):
