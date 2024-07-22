@@ -17,7 +17,7 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
   "messages": [
     {
       "role": "user",
-      "content": "Add a new recipe with peas, onion, rice and capsicum"
+      "content": "Add a new recipe with mushroom, onion, capsicum and rice"
     }
   ],
   "stream": false,
@@ -34,7 +34,7 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
   "messages": [
     {
       "role": "user",
-      "content": "In Chili Scramble recipe, please add salt to the ingredients list"
+      "content": "The Mushroom Rice recipe is missing salt in the ingredients. Please add."
     }
   ],
   "stream": false,
