@@ -45,7 +45,9 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
 
 Project Demo:
 
-[Demo Video](./assets/Notion%20Demo.mp4)
+https://github.com/user-attachments/assets/6dce5949-447a-4e29-a31b-9e7675024d27
+
+
 
 
 ## Installation
