@@ -40,7 +40,7 @@ def call_llm(messages):
     return response_data["choices"][0]["message"]["content"].strip()
 
 
-def gen_recipe(dish_title, ingredients, num_ingredients):
+def create_recipe(dish_title, ingredients, num_ingredients):
     messages = [
         {
             "role": "system",
@@ -64,7 +64,7 @@ def gen_recipe(dish_title, ingredients, num_ingredients):
     return call_llm(messages)
 
 
-def gen_recipe_title(topic):
+def create_recipe_title(topic):
     messages = [
         {
             "role": "system",
@@ -91,7 +91,7 @@ def gen_recipe_title(topic):
     return call_llm(messages)
 
 
-def gen_num_ingredients(topic):
+def count_num_ingredients(topic):
     messages = [
         {
             "role": "system",
@@ -107,7 +107,7 @@ def gen_num_ingredients(topic):
     return call_llm(messages)
 
 
-def gen_ingredient_list(topic):
+def create_ingredient_list(topic):
     messages = [
         {
             "role": "system",
@@ -135,7 +135,7 @@ def gen_ingredient_list(topic):
     return call_llm(messages)
 
 
-def gen_description(dish_title, ingredients, recipe):
+def create_description(dish_title, ingredients, recipe):
     messages = [
         {
             "role": "system",
@@ -248,118 +248,129 @@ def check_unique_titles(page_id, dish_title):
 
 
 def main(topic, page_id):
-    if type(topic) == tuple:
-        topic = ",".join(topic)
+    try:
+        if type(topic) == tuple:
+            topic = ",".join(topic)
 
-    num_ingredients = gen_num_ingredients(topic)
-    dish_title = gen_recipe_title(topic)
-    while check_unique_titles(page_id, dish_title) != "unique":
-        dish_title = gen_recipe_title(topic)
-        logging.info("Generating unique title")
+        num_ingredients = count_num_ingredients(topic)
+        dish_title = create_recipe_title(topic)
+        while check_unique_titles(page_id, dish_title) != "unique":
+            dish_title = create_recipe_title(topic)
+            logging.info("Generating unique title")
 
-    ingredients = gen_ingredient_list(topic)
-    recipe = gen_recipe(dish_title, ingredients, num_ingredients)
-    description = gen_description(dish_title, ingredients, recipe)
+        ingredients = create_ingredient_list(topic)
+        recipe = create_recipe(dish_title, ingredients, num_ingredients)
+        description = create_description(dish_title, ingredients, recipe)
 
-    ingredient = ingredients.split("\n")
+        ingredient = ingredients.split("\n")
 
-    steps = recipe.split("\n")
-    cleaned_steps = []
+        steps = recipe.split("\n")
+        cleaned_steps = []
 
-    for step in steps:
-        if step.strip():
-            cleaned_steps.append(step)
+        for step in steps:
+            if step.strip():
+                cleaned_steps.append(step)
 
-    data = {
-        "parent": {"page_id": page_id},
-        "properties": {"title": [{"text": {"content": dish_title.strip()}}]},
-        "cover": {"external": {"url": get_cover_image(dish_title)}},
-        "icon": {"emoji": get_emoji(dish_title)},
-    }
+        data = {
+            "parent": {"page_id": page_id},
+            "properties": {"title": [{"text": {"content": dish_title.strip()}}]},
+            "cover": {"external": {"url": get_cover_image(dish_title)}},
+            "icon": {"emoji": get_emoji(dish_title)},
+        }
 
-    response = requests.post(
-        "https://api.notion.com/v1/pages", headers=notion_headers, json=data
-    )
+        response = requests.post(
+            "https://api.notion.com/v1/pages", headers=notion_headers, json=data
+        )
 
-    new_page_data = response.json()
+        new_page_data = response.json()
 
-    data = {
-        "children": [
+        data = {
+            "children": [
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [
+                            {"type": "text", "text": {"content": "Dish Description"}}
+                        ]
+                    },
+                },
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {"content": description.strip()},
+                            }
+                        ]
+                    },
+                },
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [
+                            {"type": "text", "text": {"content": "Ingredients List"}}
+                        ]
+                    },
+                },
+            ]
+        }
+
+        for item in ingredient:
+            data["children"].append(
+                {
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {"content": item.strip()},
+                            }
+                        ]
+                    },
+                },
+            )
+
+        data["children"].append(
             {
                 "object": "block",
                 "type": "heading_2",
                 "heading_2": {
-                    "rich_text": [
-                        {"type": "text", "text": {"content": "Dish Description"}}
-                    ]
-                },
-            },
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [
-                        {
-                            "type": "text",
-                            "text": {"content": description.strip()},
-                        }
-                    ]
-                },
-            },
-            {
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [
-                        {"type": "text", "text": {"content": "Ingredients List"}}
-                    ]
-                },
-            },
-        ]
-    }
-
-    for item in ingredient:
-        data["children"].append(
-            {
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [
-                        {
-                            "type": "text",
-                            "text": {"content": item.strip()},
-                        }
-                    ]
+                    "rich_text": [{"type": "text", "text": {"content": "Recipe"}}]
                 },
             },
         )
 
-    data["children"].append(
-        {
-            "object": "block",
-            "type": "heading_2",
-            "heading_2": {
-                "rich_text": [{"type": "text", "text": {"content": "Recipe"}}]
-            },
-        },
-    )
+        for step in cleaned_steps:
+            data["children"].append(
+                {
+                    "object": "block",
+                    "type": "numbered_list_item",
+                    "numbered_list_item": {
+                        "rich_text": [
+                            {"type": "text", "text": {"content": step.strip()}}
+                        ]
+                    },
+                }
+            )
 
-    for step in cleaned_steps:
-        data["children"].append(
-            {
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": step.strip()}}]
-                },
-            }
+        response = requests.patch(
+            f"https://api.notion.com/v1/blocks/{new_page_data['id']}/children",
+            headers=notion_headers,
+            json=data,
         )
 
-    response = requests.patch(
-        f"https://api.notion.com/v1/blocks/{new_page_data['id']}/children",
-        headers=notion_headers,
-        json=data,
-    )
+        response.raise_for_status()
+
+    except requests.RequestException as e:
+        logging.error(f"HTTP error occured: {e}")
+
+    except Exception as e:
+        logging.error(f"Error has occured: {e}")
 
 
 if __name__ == "__main__":
