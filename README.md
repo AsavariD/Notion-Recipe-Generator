@@ -1,19 +1,52 @@
 # Recipe Generator in Python using Notion and Tune Studio
 ## Project Description
-In this project, the user will enter the ingredients from which they want a recipe to be generated using the CLI. The user-entered ingredients will then be passed to the LLM, which will generate the recipe title, recipe description, ingredient list, and recipe steps. The user will be able to see the generated recipe in Notion, along with a suitable emoji and cover image for the recipe. To generate a cover image for the recipe, Serper Search Image API is used.
+This project is a Notion Recipe Generator that allows users to create, modify and find recipes from a Notion page. The API, built using a FASTAPI server and a Large Language Model (LLM), allows user to interact with Notion easily. 
 
-Following is an example output of this project.
+Following is an example execution of this project.
 
-CLI command:
+1. Start the server:
 ```
-python main.py --topic='give me a recipe using bread, chicken, onion' \
-  --page_id=<your-notion-page-id> \
-  --model=rohan/mixtral-8x7b-inst-v0-1-32k
+python3 server.py
+```
+2. cURL command to create a new recipe:
+```
+curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{ 
+  "temperature": 0.9,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Add a new recipe with peas, onion, rice and capsicum"
+    }
+  ],
+  "stream": false,
+  "frequency_penalty": 0.2,
+  "max_tokens": 100
+}'
+```
+3. cURL command to update an exisiting recipe:
+```
+curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "temperature": 0.9,
+  "messages": [
+    {
+      "role": "user",
+      "content": "In Chili Scramble recipe, please add salt to the ingredients list"
+    }
+  ],
+  "stream": false,
+  "frequency_penalty": 0.2,
+  "max_tokens": 100
+}'
 ```
 
-Notion Output:
+Project Demo:
 
-![Chicken-Onion-Sandwich](/assets/notionImage.png)
+[Demo Video](./assets/Notion%20Demo.mp4)
+
 
 ## Installation
 To install the dependencies in the requirements.txt file run the following command:
@@ -27,21 +60,13 @@ Set the environment variables in a `.env` file
 NOTION_KEY = <your-notion-api-key>
 TUNEAI_TOKEN = <your-tuneai-api-key>
 SERPER_KEY = <your-serper-api-key>
+OPENAI_KEY = <your-openai-api-key>
 ```
 
-## Functions
-- `call_llm`: Function to call the LLM API with a specific `messages` parameter and return the response content.
+## Project Structure:
+The project consists of three files: main.py, cleanup.py and server.py.
+- `server.py`: This file starts the FASTAPI server and contains the entry point for the API.
 
-- `gen_recipe`: Function to generate a recipe based on `dish_title`, `ingredients` and `num_ingredients`.
+- `main.py`: This file contains the functionality for creating and adding a new recipe to a Notion page based on user-inputted ingredients.
 
-- `gen_recipe_title`: Function to generate a recipe title based on `topic` which is the content entered by the user.
-
-- `gen_num_ingredients`: Function to count the number of ingredients entered by the user in `topic`.
-
-- `gen_ingredient_list`: Function to create an ingredients list based on `topic` entered by the user.
-
-- `gen_description`: Function to generate a description for the recipe using `dish_title`, `ingredients` and `recipe`.
-
-- `gen_cover_image`: Function to create a cover image for the Notion page of the recipe using `dish_title` and the Serper Image Search API.
-
-- `gen_emoji`: Function to generate an emoji icon for the recipe using `dish_title`.
+- `cleanup.py`: This file handles the functionality for modifying and updating an exisiting recipe in a Notion page based on the user comment.
