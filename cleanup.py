@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 NOTION_API_KEY = os.getenv("AUTH_TOKEN")
 PARENT_PAGE_ID = "2dd7d0fcd8ef4653a0f32e55bc01a481"
