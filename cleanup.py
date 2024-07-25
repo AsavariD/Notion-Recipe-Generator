@@ -373,7 +373,7 @@ def main(page, comment):
                 update_recipe_steps(page_id, new_content, indices_heading2_blocks)
 
     except Exception as e:
-        logging.error(f"Unexpected error in main function: {e}")
+        logging.error(f"Unexpected error in cleanup main function: {e}")
 
 
 if __name__ == "__main__":
