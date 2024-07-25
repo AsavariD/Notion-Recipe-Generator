@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 PARENT_PAGE_ID = "2dd7d0fcd8ef4653a0f32e55bc01a481"
 MODEL_ID = "gpt-3.5-turbo"
