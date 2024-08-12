@@ -1,4 +1,4 @@
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 load_dotenv()
 import os
@@ -6,9 +6,13 @@ import requests
 import fire
 import logging
 
+logging.basicConfig(level=logging.INFO)
+
 NOTION_KEY = os.getenv("AUTH_TOKEN")
 TUNEAI_TOKEN = os.getenv("TUNE_KEY")
 SERPER_API_KEY = os.getenv("SERPER_KEY")
+PARENT_PAGE_ID = "2dd7d0fcd8ef4653a0f32e55bc01a481"
+
 
 notion_headers = {
     "Authorization": f"Bearer {NOTION_KEY}",
@@ -16,37 +20,50 @@ notion_headers = {
     "Notion-Version": "2022-06-28",
 }
 
+serper_headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
+
 model = "rohan/mixtral-8x7b-inst-v0-1-32k"
+pagetitle_pageid_data = {}
+
+
+def get_parent_page_data():
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{PARENT_PAGE_ID}/children",
+        headers=notion_headers,
+    )
+
+    response_data = response.json()
+    list_of_pages = response_data["results"]
+
+    for page in list_of_pages:
+        title = page["child_page"]["title"]
+        page_id = page["id"]
+        pagetitle_pageid_data[title] = page_id
+
+    return pagetitle_pageid_data
 
 
 def call_llm(messages):
-    try:
-        url = "https://proxy.tune.app/chat/completions"
-        headers = {
-            "Authorization": TUNEAI_TOKEN,
-            "Content-Type": "application/json",
-            "X-Org-Id": "e41f60a3-06c9-4133-bc6d-127bc6f3f215",
-        }
-        data = {
-            "temperature": 0.8,
-            "messages": messages,
-            "model": model,
-            "stream": False,
-            "frequency_penalty": 0,
-            "max_tokens": 500,
-        }
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        response_data = response.json()
-        return response_data["choices"][0]["message"]["content"].strip()
-
-    except requests.RequestException as e:
-        logging.error(f"Error in calling LLM: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+    url = "https://proxy.tune.app/chat/completions"
+    headers = {
+        "Authorization": TUNEAI_TOKEN,
+        "Content-Type": "application/json",
+    }
+    data = {
+        "temperature": 0.8,
+        "messages": messages,
+        "model": model,
+        "stream": False,
+        "frequency_penalty": 0,
+        "max_tokens": 500,
+    }
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    response_data = response.json()
+    return response_data["choices"][0]["message"]["content"].strip()
 
 
-def create_recipe(dish_title, ingredients, num_ingredients):
+def gen_recipe(dish_title, ingredients, num_ingredients):
     messages = [
         {
             "role": "system",
@@ -70,7 +87,7 @@ def create_recipe(dish_title, ingredients, num_ingredients):
     return call_llm(messages)
 
 
-def create_recipe_title(topic):
+def gen_recipe_title(topic):
     messages = [
         {
             "role": "system",
@@ -97,7 +114,7 @@ def create_recipe_title(topic):
     return call_llm(messages)
 
 
-def count_num_ingredients(topic):
+def gen_num_ingredients(topic):
     messages = [
         {
             "role": "system",
@@ -113,7 +130,7 @@ def count_num_ingredients(topic):
     return call_llm(messages)
 
 
-def create_ingredient_list(topic):
+def gen_ingredient_list(topic):
     messages = [
         {
             "role": "system",
@@ -130,7 +147,10 @@ def create_ingredient_list(topic):
                 Flour
                 Milk
 
-                Ensure that all provided ingredients are listed exactly as specified.""",
+                Ensure that all provided ingredients are listed exactly as specified.
+                
+                Exception:
+                If the user enters a dish name and does not mention specific ingredients, you may add ingredients suitable to the dish name.""",
         },
         {
             "role": "user",
@@ -141,7 +161,7 @@ def create_ingredient_list(topic):
     return call_llm(messages)
 
 
-def create_description(dish_title, ingredients, recipe):
+def gen_description(dish_title, ingredients, recipe):
     messages = [
         {
             "role": "system",
@@ -161,22 +181,13 @@ def create_description(dish_title, ingredients, recipe):
 
 
 def get_cover_image(dish_title):
-    try:
-        url = "https://google.serper.dev/images"
-        serper_headers = {
-            "X-API-KEY": SERPER_API_KEY,
-            "Content-Type": "application/json",
-        }
-        data = {"q": dish_title}
-        response = requests.post(url, headers=serper_headers, json=data)
-        response.raise_for_status()
-        response_data = response.json()
-        return response_data["images"][0]["imageUrl"]
+    url = "https://google.serper.dev/images"
+    data = {"q": dish_title}
+    response = requests.post(url, headers=serper_headers, json=data)
+    response.raise_for_status()
+    response_data = response.json()
 
-    except requests.RequestException as e:
-        logging.error(f"Error fetching cover image: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+    return response_data["images"][0]["imageUrl"]
 
 
 def get_emoji(dish_title):
@@ -214,97 +225,226 @@ def get_emoji(dish_title):
 
 
 def check_unique_titles(page_id, dish_title):
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{page_id}/children", headers=notion_headers
+    )
+    response_data = response.json()
+    list_of_pages = response_data["results"]
+    recipe_titles = []
+    page_ids = []
+
+    for i in range(len(list_of_pages)):
+        recipe_titles.append(list_of_pages[i]["child_page"]["title"])
+        page_ids.append(list_of_pages[i]["id"])
+
+    messages = [
+        {
+            "role": "system",
+            "content": 'Your task is to verify if a title is unique compared to an existing list of titles. Follow these steps:\n\n2. Compare the "Title" against the existing "List" of titles.\n3. The output should be either "unique" or "not unique".\n4. Do not print any additional text.',
+        },
+        {
+            "role": "user",
+            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {
+            "role": "user",
+            "content": "Title: \"Honey Garlic Chicken\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "unique"},
+        {
+            "role": "user",
+            "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "not unique"},
+        {
+            "role": "user",
+            "content": "Title: \"Chocolate Pudding\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
+        },
+        {"role": "assistant", "content": "unique"},
+        {
+            "role": "user",
+            "content": f"""Title: "{dish_title}"
+            List: {recipe_titles}
+            Return "unique" if the title is not found in the given list. 
+            Return "not unique" if the title is found in the given list.""",
+        },
+    ]
+
+    return call_llm(messages)
+
+
+def create_index_page():
+    data = {
+        "parent": {"page_id": PARENT_PAGE_ID},
+        "properties": {"title": [{"text": {"content": "Index"}}]},
+        "cover": {
+            "external": {
+                "url": "https://www.shutterstock.com/image-photo/recipes-word-made-herbs-spices-260nw-108508472.jpg"
+            }
+        },
+        "icon": {"emoji": "📄"},
+    }
+
+    response = requests.post(
+        "https://api.notion.com/v1/pages", headers=notion_headers, json=data
+    )
+
+    logging.info("Index page created")
+
+    index_page_data = response.json()
+
+    logging.info(f"Index page id: {index_page_data['id']}")
+
+    return index_page_data["id"]
+
+
+def create_database(index_page_id):
+    data_database = {
+        "parent": {
+            "type": "page_id",
+            "page_id": index_page_id,
+        },
+        "title": [{"type": "text", "text": {"content": "Recipes List"}}],
+        "properties": {
+            "Recipe Name": {"title": {}},
+            "Ingredients": {"rich_text": {}},
+            "Pricing": {"rich_text": {}},
+        },
+    }
+
+    response = requests.post(
+        "https://api.notion.com/v1/databases",
+        headers=notion_headers,
+        json=data_database,
+    )
+
+    logging.info("Database created")
+
+
+def get_database_id(index_page_id):
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{index_page_id}/children",
+        headers=notion_headers,
+    )
+
+    database_data = response.json()
+    database_id = database_data["results"][0]["id"]
+    logging.info(f"Database id: {database_id}")
+
+    return database_id
+
+
+def add_database_row(
+    database_id, recipe_title, ingredients_list, ingredients_price_list
+):
+
+    data = {
+        "parent": {"database_id": database_id},
+        "properties": {
+            "Recipe Name": {"title": [{"text": {"content": recipe_title}}]},
+            "Ingredients": {"rich_text": [{"text": {"content": ingredients_list}}]},
+            "Pricing": {"rich_text": [{"text": {"content": ingredients_price_list}}]},
+        },
+    }
+
+    response = requests.post(
+        "https://api.notion.com/v1/pages", headers=notion_headers, json=data
+    )
+
+    logging.info("New row created")
+
+
+def get_ingredients_price_list(ingredients_list):
+    price_list = []
+
+    for ingredient in ingredients_list:
+        try:
+            url = "https://google.serper.dev/shopping"
+            data = {"q": ingredient}
+            response = requests.request("POST", url, headers=serper_headers, json=data)
+            response.raise_for_status()
+            response_data = response.json()
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": """From the given list of data, you will return the cheapest price for the ingredients. 
+                    You only return the dollar value. The format of your answer will be $price.
+                    Do not include any additional text in your response""",
+                },
+                {"role": "user", "content": str(response_data)},
+            ]
+
+            ingredient_price = call_llm(messages)
+
+            price_list.append(ingredient_price)
+        except Exception as e:
+            logging.error(f"Error in finding price for ingredient {ingredient}: {e}")
+
+    ingredients_price_list = ",".join(price_list)
+
+    logging.info("Ingredients Price List ready")
+
+    return ingredients_price_list
+
+
+def main(topic):
+
     try:
-        response = requests.get(
-            f"https://api.notion.com/v1/blocks/{page_id}/children",
-            headers=notion_headers,
-        )
-        response_data = response.json()
-        list_of_pages = response_data["results"]
-        recipe_titles = []
-        page_ids = []
+        parent_page_data = get_parent_page_data()
+        logging.info(f"Parent page data: {parent_page_data}")
 
-        for i in range(len(list_of_pages)):
-            recipe_titles.append(list_of_pages[i]["child_page"]["title"])
-            page_ids.append(list_of_pages[i]["id"])
+        if "Index" not in parent_page_data.keys():
+            try:
+                index_page_id = create_index_page()
+                create_database(index_page_id)
+                database_id = get_database_id(index_page_id)
+            except Exception as e:
+                logging.error(f"Error creating index page or database: {e}")
+        else:
+            index_page_id = parent_page_data["Index"]
+            database_id = get_database_id(index_page_id)
 
-        messages = [
-            {
-                "role": "system",
-                "content": 'Your task is to verify if a title is unique compared to an existing list of titles. Follow these steps:\n\n2. Compare the "Title" against the existing "List" of titles.\n3. The output should be either "unique" or "not unique".\n4. Do not print any additional text.',
-            },
-            {
-                "role": "user",
-                "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-            },
-            {
-                "role": "user",
-                "content": "Title: \"Honey Garlic Chicken\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-            },
-            {"role": "assistant", "content": "unique"},
-            {
-                "role": "user",
-                "content": "Title: \"Chicken Onion Bread\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-            },
-            {"role": "assistant", "content": "not unique"},
-            {
-                "role": "user",
-                "content": "Title: \"Chocolate Pudding\"\nList: ['Garlic Onion Chicken', 'Lemon Ginger Fish', 'Chicken Rice Onion', 'Chicken Onion Sandwich', 'Chicken Onion Bread']?\nReturn \"unique\" if the title is not found in the given list. \nReturn \"not unique\" if the title is found in the given list.",
-            },
-            {"role": "assistant", "content": "unique"},
-            {
-                "role": "user",
-                "content": f"""Title: "{dish_title}"
-                List: {recipe_titles}
-                Return "unique" if the title is not found in the given list. 
-                Return "not unique" if the title is found in the given list.""",
-            },
-        ]
-
-        return call_llm(messages)
-
-    except requests.RequestException as e:
-        logging.error(f"Error checking unique titles: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-
-
-def main(topic, page_id):
-    try:
         if type(topic) == tuple:
             topic = ",".join(topic)
 
-        num_ingredients = count_num_ingredients(topic)
-        dish_title = create_recipe_title(topic)
-        while check_unique_titles(page_id, dish_title) != "unique":
-            dish_title = create_recipe_title(topic)
-            logging.info("Generating unique title")
+        try:
+            num_ingredients = gen_num_ingredients(topic)
+            dish_title = gen_recipe_title(topic)
+            while check_unique_titles(PARENT_PAGE_ID, dish_title) != "unique":
+                dish_title = gen_recipe_title(topic)
+                logging.info("Generating unique title")
 
-        ingredients = create_ingredient_list(topic)
-        recipe = create_recipe(dish_title, ingredients, num_ingredients)
-        description = create_description(dish_title, ingredients, recipe)
+            ingredients = gen_ingredient_list(topic)
+            recipe = gen_recipe(dish_title, ingredients, num_ingredients)
+            description = gen_description(dish_title, ingredients, recipe)
+        except Exception as e:
+            logging.error(f"Error generating recipe details: {e}")
+            return
 
         ingredient = ingredients.split("\n")
+        ingredients_price_list = get_ingredients_price_list(ingredient)
+        comma_separated_ingredients_list = ", ".join(ingredient)
 
         steps = recipe.split("\n")
-        cleaned_steps = []
-
-        for step in steps:
-            if step.strip():
-                cleaned_steps.append(step)
+        cleaned_steps = [step for step in steps if step.strip()]
 
         data = {
-            "parent": {"page_id": page_id},
+            "parent": {"page_id": PARENT_PAGE_ID},
             "properties": {"title": [{"text": {"content": dish_title.strip()}}]},
             "cover": {"external": {"url": get_cover_image(dish_title)}},
             "icon": {"emoji": get_emoji(dish_title)},
         }
 
-        response = requests.post(
-            "https://api.notion.com/v1/pages", headers=notion_headers, json=data
-        )
-
-        new_page_data = response.json()
+        try:
+            response = requests.post(
+                "https://api.notion.com/v1/pages", headers=notion_headers, json=data
+            )
+            response.raise_for_status()
+            new_page_data = response.json()
+        except requests.RequestException as e:
+            logging.error(f"Error creating Notion page: {e}")
+            return
 
         data = {
             "children": [
@@ -380,19 +520,31 @@ def main(topic, page_id):
                 }
             )
 
-        response = requests.patch(
-            f"https://api.notion.com/v1/blocks/{new_page_data['id']}/children",
-            headers=notion_headers,
-            json=data,
-        )
+        try:
+            response = requests.patch(
+                f"https://api.notion.com/v1/blocks/{new_page_data['id']}/children",
+                headers=notion_headers,
+                json=data,
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            logging.error(f"Error updating Notion page: {e}")
+            return
 
-        response.raise_for_status()
+        logging.info("Recipe added")
 
-    except requests.RequestException as e:
-        logging.error(f"HTTP error occured: {e}")
+        try:
+            add_database_row(
+                database_id,
+                dish_title,
+                comma_separated_ingredients_list,
+                ingredients_price_list,
+            )
+        except Exception as e:
+            logging.error(f"Error adding row to database: {e}")
 
     except Exception as e:
-        logging.error(f"Error has occured: {e}")
+        logging.error(f"Unexpected error: {e}")
 
 
 if __name__ == "__main__":
