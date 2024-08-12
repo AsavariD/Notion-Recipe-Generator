@@ -2,7 +2,7 @@ import logging.config
 from typing import List
 from pydantic import BaseModel
 import logging
-from cleanup import get_page_data
+from cleanup import get_parent_page_data
 from main import main as add_recipe_to_notion
 from cleanup import main as update_recipe_contents
 
@@ -56,18 +56,16 @@ def find_recipes(recipe_pages_data):
 
 
 def add_recipe(ingredient):
-    add_recipe_to_notion(ingredient, PARENT_PAGE_ID)
+    add_recipe_to_notion(ingredient)
 
 
 def update_recipe(page, comment):
     update_recipe_contents(page, comment)
 
 
-try:
-    recipe_pages_data = get_page_data()
-    recipe_titles = find_recipes(recipe_pages_data)
-except Exception as e:
-    logging.error(f"Error in fetching page data: {e}")
+recipe_pages_data = get_parent_page_data()
+recipe_titles = find_recipes(recipe_pages_data)
+
 
 find_recipes_tool = tt.Tool(
     name="find_recipes",
@@ -116,93 +114,86 @@ async def chat_completions(request: Request, data: ChatCompletionRequest):
         raise HTTPException(400, "Temperature must be between 0 and 1")
 
     # call the model
-    try:
-        model = ta.Openai(MODEL_ID)
-        model.set_api_token(os.getenv("OPENAI_KEY"))
+    model = ta.Openai(MODEL_ID)
+    model.set_api_token(os.getenv("OPENAI_KEY"))
 
-        logging.info(data.messages)
-        user_message = "\n".join(
-            msg.content for msg in data.messages if msg.role == "user"
-        )
-        thread = tt.Thread(
-            tt.system(
-                """You are a cookbook having access to a Notion page with recipes.
-                Your can do the following tasks:
-                1. Find appropriate recipe titles from the Notion page based on the user input.
-                2. Add a new recipe to the Notion page based on user inputted ingredients.
-                3. Update parts of the recipe according to user comment in Notion.
-                """
-            ),
-            tt.human(user_message),
-            tools=[find_recipes_tool, add_recipe_tool, update_recipe_tool],
+    logging.info(data.messages)
+    user_message = "\n".join(msg.content for msg in data.messages if msg.role == "user")
+    thread = tt.Thread(
+        tt.system(
+            """You are a cookbook having access to a Notion page with recipes.
+            You can do the following tasks:
+            1. Find appropriate recipe titles from the Notion page based on the user input.
+            2. Add a new recipe to the Notion page based on user inputted ingredients.
+            3. Update parts of the recipe according to user comment in Notion.
+            """
+        ),
+        tt.human(user_message),
+        tools=[find_recipes_tool, add_recipe_tool, update_recipe_tool],
+    )
+    logging.info(thread)
+
+    out = model.chat(thread)
+    logging.info(out)
+
+    function_call = tt.function_call(out)
+    logging.info(function_call)
+
+    if out["name"] == "find_recipes":
+        thread.append(function_call)
+        logging.info(thread)
+
+        thread.append(tt.function_resp({"titles": recipe_titles}))
+        logging.info(thread)
+    elif out["name"] == "add_recipe":
+        ingredients = out["arguments"]["ingredient"]
+
+        thread.append(function_call)
+        logging.info(thread)
+
+        thread.append(tt.function_resp({"recipe": add_recipe(ingredients)}))
+        logging.info(thread)
+    elif out["name"] == "update_recipe":
+        page_title = out["arguments"]["page title"]
+        user_comment = out["arguments"]["comment"]
+
+        thread.append(function_call)
+        logging.info(thread)
+
+        thread.append(
+            tt.function_resp(
+                {"updated recipe": update_recipe(page_title, user_comment)}
+            )
         )
         logging.info(thread)
 
-        out = model.chat(thread)
-        logging.info(out)
-
-        function_call = tt.function_call(out)
-        logging.info(function_call)
-
-        if out["name"] == "find_recipes":
-            thread.append(function_call)
-            logging.info(thread)
-
-            thread.append(tt.function_resp({"titles": recipe_titles}))
-            logging.info(thread)
-        elif out["name"] == "add_recipe":
-            ingredients = out["arguments"]["ingredient"]
-
-            thread.append(function_call)
-            logging.info(thread)
-
-            thread.append(tt.function_resp({"recipe": add_recipe(ingredients)}))
-            logging.info(thread)
-        elif out["name"] == "update_recipe":
-            page_title = out["arguments"]["page title"]
-            user_comment = out["arguments"]["comment"]
-
-            thread.append(function_call)
-            logging.info(thread)
-
-            thread.append(
-                tt.function_resp(
-                    {"updated recipe": update_recipe(page_title, user_comment)}
+    # return the response
+    if data.stream:
+        stream_resp = model.stream_chat(
+            thread,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+        api_resp = tu.generator_to_api_events(
+            model=MODEL_ID,
+            generator=stream_resp,
+        )
+        return StreamingResponse(api_resp, media_type="text/event-stream")
+    else:
+        output = model.chat(thread)
+        logging.info(output)
+        response = ChatCompletionResponse(
+            id=f"chatcmpl-{tu.get_snowflake()}",
+            object="chat.completion",
+            choices=[
+                ChatCompletionResponseChoice(
+                    index=0,
+                    message=Message(content=str(output), role="assistant"),
+                    finish_reason="stop",
                 )
-            )
-            logging.info(thread)
-
-        # return the response
-        if data.stream:
-            stream_resp = model.stream_chat(
-                thread,
-                temperature=data.temperature,
-                max_tokens=data.max_tokens,
-            )
-            api_resp = tu.generator_to_api_events(
-                model=MODEL_ID,
-                generator=stream_resp,
-            )
-            return StreamingResponse(api_resp, media_type="text/event-stream")
-        else:
-            output = model.chat(thread)
-            logging.info(output)
-            response = ChatCompletionResponse(
-                id=f"chatcmpl-{tu.get_snowflake()}",
-                object="chat.completion",
-                choices=[
-                    ChatCompletionResponseChoice(
-                        index=0,
-                        message=Message(content=str(output), role="assistant"),
-                        finish_reason="stop",
-                    )
-                ],
-            )
-            return response
-
-    except Exception as e:
-        logging.error(f"Error in API endpoint: {e}")
-        raise HTTPException(500, "Internal Server Error")
+            ],
+        )
+        return response
 
 
 @app.post("/")
