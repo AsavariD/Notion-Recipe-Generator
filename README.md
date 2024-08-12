@@ -70,7 +70,7 @@ OPENAI_KEY = <your-openai-api-key>
 
 ## Project Structure:
 The project consists of three files: main.py, cleanup.py and server.py.
-- `server.py`: This file starts the FASTAPI server and contains the entry point for the API.
+- `server.py`: This file starts the FASTAPI server and contains the tools available for the LLM to choose from.
 
 - `main.py`: This file contains the functionality for creating and adding a new recipe to a Notion page based on user-inputted ingredients.
 
