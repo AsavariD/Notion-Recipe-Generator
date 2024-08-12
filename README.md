@@ -47,7 +47,8 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
 
 Project Demo:
 
-https://github.com/user-attachments/assets/6dce5949-447a-4e29-a31b-9e7675024d27
+https://github.com/user-attachments/assets/3e2eef6f-ef39-4a47-b82d-4d4c59305da2
+
 
 
 
