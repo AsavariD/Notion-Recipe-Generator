@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 import fire
-from main import call_llm, get_cover_image, get_emoji
+from main import call_llm, get_cover_image, get_emoji, get_parent_page_data
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,84 +19,48 @@ notion_headers = {
 
 recipe_page_block_ids = []
 recipe_page_heading_block_ids = []
-pagetitle_pageid_data = {}
+pagetitle_pageid_data = get_parent_page_data
 
 
-def get_page_data():
-    try:
-        response = requests.get(
-            f"https://api.notion.com/v1/blocks/{PARENT_PAGE_ID}/children",
-            headers=notion_headers,
-        )
+def get_blocks_content(page_id, page_name):
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{page_id}/children", headers=notion_headers
+    )
 
-        response_data = response.json()
-        list_of_pages = response_data["results"]
+    blocks = response.json()["results"]
+    logging.info(f"Blocks in child page: {blocks}")
 
-        for page in list_of_pages:
-            title = page["child_page"]["title"]
-            page_id = page["id"]
-            pagetitle_pageid_data[title] = page_id
+    content = {
+        "heading_2": "",
+        "paragraph": "",
+        "bulleted_list_item": "",
+        "numbered_list_item": "",
+    }
 
-        return pagetitle_pageid_data
+    for block in blocks:
+        recipe_page_block_ids.append(block["id"])
+        block_type = block["type"]
+        if block_type == "heading_2":
+            recipe_page_heading_block_ids.append(block["id"])
+        text_content = block[block_type]["rich_text"][0]["text"]["content"]
 
-    except requests.RequestException as e:
-        logging.error(f"Error fetching page data: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error occured: {e}")
+        if block_type in content:
+            if content[block_type]:
+                content[block_type] += "\n" + text_content
+            else:
+                content[block_type] = text_content
 
-
-def available_recipes():
-    print("Available recipes: ")
-    for title in pagetitle_pageid_data:
-        print(title)
-
-
-def get_page_content(page_id, page_name):
-    try:
-        response = requests.get(
-            f"https://api.notion.com/v1/blocks/{page_id}/children",
-            headers=notion_headers,
-        )
-
-        blocks = response.json()["results"]
-        logging.info(f"Blocks in child page: {blocks}")
-
-        content = {
-            "heading_2": "",
-            "paragraph": "",
-            "bulleted_list_item": "",
-            "numbered_list_item": "",
-        }
-
-        for block in blocks:
-            recipe_page_block_ids.append(block["id"])
-            block_type = block["type"]
-            if block_type == "heading_2":
-                recipe_page_heading_block_ids.append(block["id"])
-            text_content = block[block_type]["rich_text"][0]["text"]["content"]
-
-            if block_type in content:
-                if content[block_type]:
-                    content[block_type] += "\n" + text_content
-                else:
-                    content[block_type] = text_content
-
-        recipe_sections_content = {
-            "Title": page_name,
-            "Description": content["paragraph"],
-            "Ingredients List": content["bulleted_list_item"],
-            "Recipe": content["numbered_list_item"],
-        }
-        logging.info(f"Old content: {recipe_sections_content}")
-        return recipe_sections_content
-
-    except requests.RequestException as e:
-        logging.error(f"Error in fetching page content: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error occured: {e}")
+    recipe_sections_content = {
+        "Title": page_name,
+        "Description": content["paragraph"],
+        "Ingredients List": content["bulleted_list_item"],
+        "Recipe": content["numbered_list_item"],
+    }
+    logging.info(f"Old content: {recipe_sections_content}")
+    return recipe_sections_content
 
 
-def notion_blocks_to_modify(comment):
+def blocks_to_modify(comment):
     messages = [
         {
             "role": "system",
@@ -139,7 +103,7 @@ def notion_blocks_to_modify(comment):
     return call_llm(messages)
 
 
-def modify_page_content(block_heading, old_block_content, comment):
+def modify_block_content(block_heading, old_block_content, comment):
     messages = [
         {
             "role": "system",
@@ -189,191 +153,156 @@ def modify_page_content(block_heading, old_block_content, comment):
 
 
 def update_recipe_title(page_id, new_title, new_cover, new_emoji):
-    try:
-        data = {
-            "properties": {"title": [{"text": {"content": new_title.strip()}}]},
-            "cover": {"external": {"url": new_cover}},
-            "icon": {"emoji": new_emoji},
-        }
+    data = {
+        "properties": {"title": [{"text": {"content": new_title.strip()}}]},
+        "cover": {"external": {"url": new_cover}},
+        "icon": {"emoji": new_emoji},
+    }
 
-        response = requests.patch(
-            f"https://api.notion.com/v1/pages/{page_id}",
-            headers=notion_headers,
-            json=data,
-        )
+    response = requests.patch(
+        f"https://api.notion.com/v1/pages/{page_id}",
+        headers=notion_headers,
+        json=data,
+    )
 
-        logging.info("Title updated on Notion")
-
-    except requests.RequestException as e:
-        logging.error(f"Error updating recipe title: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error occurred while updating recipe title: {e}")
+    logging.info("Title updated on Notion")
 
 
 def update_recipe_description(new_description):
-    try:
-        description_block_id = recipe_page_block_ids[1]
-        logging.info(f"block id: {description_block_id}")
+    description_block_id = recipe_page_block_ids[1]
+    logging.info(f"block id: {description_block_id}")
 
-        data = {
-            "paragraph": {
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {"content": new_description.strip()},
-                    }
-                ]
-            }
+    data = {
+        "paragraph": {
+            "rich_text": [
+                {
+                    "type": "text",
+                    "text": {"content": new_description.strip()},
+                }
+            ]
         }
-        response = requests.patch(
-            f"https://api.notion.com/v1/blocks/{description_block_id}",
-            headers=notion_headers,
-            json=data,
-        )
+    }
+    response = requests.patch(
+        f"https://api.notion.com/v1/blocks/{description_block_id}",
+        headers=notion_headers,
+        json=data,
+    )
 
-        logging.info("Description updated on Notion")
-
-    except requests.RequestException as e:
-        logging.error(f"Error updating recipe description: {e}")
-    except Exception as e:
-        logging.error(
-            f"Unexpected error occurred while updating recipe description: {e}"
-        )
+    logging.info("Description updated on Notion")
 
 
 def update_ingredients_list(page_id, new_ingredients_list, indices_heading_blocks):
-    try:
-        for index in range(indices_heading_blocks[1] + 1, indices_heading_blocks[2]):
-            response = requests.delete(
-                f"https://api.notion.com/v1/blocks/{recipe_page_block_ids[index]}",
-                headers=notion_headers,
-            )
-            logging.info(f"Block with id {recipe_page_block_ids[index]} deleted.")
-
-        ingredients = new_ingredients_list.split("\n")
-        logging.info(ingredients)
-
-        data = {"children": [], "after": recipe_page_heading_block_ids[1]}
-
-        for ingredient in ingredients:
-            data["children"].append(
-                {
-                    "object": "block",
-                    "type": "bulleted_list_item",
-                    "bulleted_list_item": {
-                        "rich_text": [
-                            {
-                                "type": "text",
-                                "text": {"content": ingredient.strip()},
-                            }
-                        ]
-                    },
-                },
-            )
-
-        response = requests.patch(
-            f"https://api.notion.com/v1/blocks/{page_id}/children",
+    for index in range(indices_heading_blocks[1] + 1, indices_heading_blocks[2]):
+        response = requests.delete(
+            f"https://api.notion.com/v1/blocks/{recipe_page_block_ids[index]}",
             headers=notion_headers,
-            json=data,
+        )
+        logging.info(f"Block with id {recipe_page_block_ids[index]} deleted.")
+
+    ingredients = new_ingredients_list.split("\n")
+    logging.info(ingredients)
+
+    data = {"children": [], "after": recipe_page_heading_block_ids[1]}
+
+    for ingredient in ingredients:
+        data["children"].append(
+            {
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {"content": ingredient.strip()},
+                        }
+                    ]
+                },
+            },
         )
 
-        logging.info("New ingredients blocks added")
+    response = requests.patch(
+        f"https://api.notion.com/v1/blocks/{page_id}/children",
+        headers=notion_headers,
+        json=data,
+    )
 
-    except requests.RequestException as e:
-        logging.error(f"Error updating ingredients list: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error occurred while updating ingredients list: {e}")
+    logging.info("New ingredients blocks added")
 
 
 def update_recipe_steps(page_id, new_recipe, indices_heading_blocks):
-    try:
-        for index in range(indices_heading_blocks[2] + 1, len(recipe_page_block_ids)):
-            response = requests.delete(
-                f"https://api.notion.com/v1/blocks/{recipe_page_block_ids[index]}",
-                headers=notion_headers,
-            )
-            logging.info(f"Block with id {recipe_page_block_ids[index]} deleted.")
-
-        recipe_steps = new_recipe.split("\n")
-        cleaned_steps = []
-
-        for step in recipe_steps:
-            if step.strip():
-                cleaned_steps.append(step)
-
-        logging.info(cleaned_steps)
-
-        data = {"children": [], "after": recipe_page_heading_block_ids[2]}
-
-        for step in cleaned_steps:
-            data["children"].append(
-                {
-                    "object": "block",
-                    "type": "numbered_list_item",
-                    "numbered_list_item": {
-                        "rich_text": [
-                            {"type": "text", "text": {"content": step.strip()}}
-                        ]
-                    },
-                }
-            )
-
-        response = requests.patch(
-            f"https://api.notion.com/v1/blocks/{page_id}/children",
+    for index in range(indices_heading_blocks[2] + 1, len(recipe_page_block_ids)):
+        response = requests.delete(
+            f"https://api.notion.com/v1/blocks/{recipe_page_block_ids[index]}",
             headers=notion_headers,
-            json=data,
+        )
+        logging.info(f"Block with id {recipe_page_block_ids[index]} deleted.")
+
+    recipe_steps = new_recipe.split("\n")
+    cleaned_steps = []
+
+    for step in recipe_steps:
+        if step.strip():
+            cleaned_steps.append(step)
+
+    logging.info(cleaned_steps)
+
+    data = {"children": [], "after": recipe_page_heading_block_ids[2]}
+
+    for step in cleaned_steps:
+        data["children"].append(
+            {
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": step.strip()}}]
+                },
+            }
         )
 
-        logging.info("New recipe steps added")
+    response = requests.patch(
+        f"https://api.notion.com/v1/blocks/{page_id}/children",
+        headers=notion_headers,
+        json=data,
+    )
 
-    except requests.RequestException as e:
-        logging.error(f"Error updating recipe steps: {e}")
-    except Exception as e:
-        logging.error(f"Unexpected error occurred while updating recipe steps: {e}")
+    logging.info("New recipe steps added")
 
 
 def main(page, comment):
-    try:
-        pagetitle_pageid_data = get_page_data()
-        page_id = pagetitle_pageid_data[page]
-        available_recipes()
+    pagetitle_pageid_data = get_parent_page_data()
+    page_id = pagetitle_pageid_data[page]
 
-        notion_blocks_to_modify = notion_blocks_to_modify(comment).split("\n")
+    notion_blocks_to_modify = blocks_to_modify(comment).split("\n")
 
-        logging.info(f"Content area to modify: {notion_blocks_to_modify}")
+    logging.info(f"Content area to modify: {notion_blocks_to_modify}")
 
-        old_recipe_blocks_content = get_page_content(page_id, page)
+    old_recipe_blocks_content = get_blocks_content(page_id, page)
 
-        logging.info(f"Block Ids: {recipe_page_block_ids}")
-        logging.info(f"Heading block ids: {recipe_page_heading_block_ids}")
+    logging.info(f"Block Ids: {recipe_page_block_ids}")
+    logging.info(f"Heading block ids: {recipe_page_heading_block_ids}")
 
-        indices_heading2_blocks = []
-        for heading2_block_id in recipe_page_heading_block_ids:
-            indices_heading2_blocks.append(
-                recipe_page_block_ids.index(heading2_block_id)
-            )
-        logging.info(indices_heading2_blocks)
+    indices_heading2_blocks = []
+    for heading2_block_id in recipe_page_heading_block_ids:
+        indices_heading2_blocks.append(recipe_page_block_ids.index(heading2_block_id))
+    logging.info(indices_heading2_blocks)
 
-        for notion_block in notion_blocks_to_modify:
-            new_content = modify_page_content(
-                notion_block, old_recipe_blocks_content[notion_block], comment
-            )
+    for notion_block in notion_blocks_to_modify:
+        new_content = modify_block_content(
+            notion_block, old_recipe_blocks_content[notion_block], comment
+        )
 
-            logging.info(new_content)
+        logging.info(new_content)
 
-            if notion_block == "Title":
-                new_emoji = get_emoji(new_content)
-                new_cover = get_cover_image(new_content)
-                update_recipe_title(page_id, new_content, new_cover, new_emoji)
-            elif notion_block == "Description":
-                update_recipe_description(new_content)
-            elif notion_block == "Ingredients List":
-                update_ingredients_list(page_id, new_content, indices_heading2_blocks)
-            elif notion_block == "Recipe":
-                update_recipe_steps(page_id, new_content, indices_heading2_blocks)
-
-    except Exception as e:
-        logging.error(f"Unexpected error in cleanup main function: {e}")
+        if notion_block == "Title":
+            new_emoji = get_emoji(new_content)
+            new_cover = get_cover_image(new_content)
+            update_recipe_title(page_id, new_content, new_cover, new_emoji)
+        elif notion_block == "Description":
+            update_recipe_description(new_content)
+        elif notion_block == "Ingredients List":
+            update_ingredients_list(page_id, new_content, indices_heading2_blocks)
+        elif notion_block == "Recipe":
+            update_recipe_steps(page_id, new_content, indices_heading2_blocks)
 
 
 if __name__ == "__main__":
