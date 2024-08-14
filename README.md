@@ -1,5 +1,10 @@
 # Recipe Generator in Python using Notion and Tune Studio
 ## Project Description
+I completed this project as a part of my internship at Tune AI. 
+
+![IMG_6038](https://github.com/user-attachments/assets/892e67a5-7d0b-4f5f-b47b-b6c76a0ace02)
+
+
 This project is a Notion Recipe Generator that uses the Notion API, Tune Studio, a FASTAPI server, and a large language model (LLM) for creating and modifying recipes. The project consists of a parent page, which contains an index page and sub-pages for individual recipes. The index page has a database with three columns: recipe name, ingredient list, and prices of the individual ingredients. The index page is updated every time a new recipe is created.
 
 For the creation of recipes, the user-entered ingredients are read by the LLM, based on which it generates a recipe title, description, bullet list of ingredients, and numbered list of the recipe steps. In addition, a cover image and emoji best suited for the recipe title are added to the Notion recipe page. The components are added to a new notion page and published as a recipe on the parent page. For modifying existing recipes, the LLM identifies which part of the recipe needs to be changed based on the user comment. For example, if the user says "Add salt to the ingredients list," the program will only update the ingredients list in the existing recipe.
